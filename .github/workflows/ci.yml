@@ -1,0 +1,124 @@
+# Tests every push and pull request; on main, releases the top CHANGELOG.md section as an alpha APK.
+#
+# Release = a CHANGELOG.md section whose version has no v<version> tag yet: builds the release APK,
+# tags v<version> and publishes a GitHub pre-release with that section as notes. Pushes without a
+# new section only run the tests.
+#
+# Signing: the BYEDIRTY_KEYSTORE_BASE64 (base64 .jks), BYEDIRTY_KEYSTORE_PASSWORD, BYEDIRTY_KEY_ALIAS
+# and BYEDIRTY_KEY_PASSWORD secrets sign every release with the same key, so each APK installs as an
+# update over the last. Without them the release fails rather than shipping an unsigned APK.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Gradle's daemon toolchain is pinned to JDK 25 (gradle/gradle-daemon-jvm.properties).
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Unit tests and debug build
+        run: ./gradlew --no-configuration-cache :app:testDebugUnitTest :app:assembleDebug
+
+  release:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags + commit count (version code)
+
+      - name: Version from CHANGELOG.md
+        id: version
+        run: |
+          v="$(Tools/changelog.sh version)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
+            echo "::notice::$v is already released. Add a new section to CHANGELOG.md to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last="$(git tag --list 'v*' | sed 's/^v//' | sort -V | tail -1)"
+          if [ -n "$last" ] && [ "$(printf '%s\n%s\n' "$last" "$v" | sort -V | tail -1)" != "$v" ]; then
+            echo "::error::CHANGELOG.md's top version $v is not newer than the last release $last."
+            exit 1
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        if: steps.version.outputs.release == 'true'
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v5
+        if: steps.version.outputs.release == 'true'
+
+      - name: Signing key
+        if: steps.version.outputs.release == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.BYEDIRTY_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::No BYEDIRTY_KEYSTORE_BASE64 secret: releases must be signed with the project key."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "BYEDIRTY_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        if: steps.version.outputs.release == 'true'
+        env:
+          BYEDIRTY_KEYSTORE_PASSWORD: ${{ secrets.BYEDIRTY_KEYSTORE_PASSWORD }}
+          BYEDIRTY_KEY_ALIAS: ${{ secrets.BYEDIRTY_KEY_ALIAS }}
+          BYEDIRTY_KEY_PASSWORD: ${{ secrets.BYEDIRTY_KEY_PASSWORD }}
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          ./gradlew --no-configuration-cache :app:assembleRelease \
+            -PversionName="$v" -PversionCode="$(git rev-list --count HEAD)"
+          mkdir -p "$RUNNER_TEMP/release"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/release/ByeDirty-$v.apk"
+          rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Publish pre-release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          notes="$RUNNER_TEMP/notes.md"
+          Tools/changelog.sh release-notes > "$notes"
+          cat >> "$notes" <<'EOF'
+
+          ---
+          **Installing:** download `ByeDirty-*.apk` on your Android phone (Android 8 or later, with NFC) and open
+          it. Android asks you to allow installs from your browser or file manager the first time. Later
+          releases install over this one and keep your shower history.
+
+          ByeDirty is an independent, unofficial app. It isn't affiliated with or endorsed by Hello Klean.
+          EOF
+          gh release create "v$v" "$RUNNER_TEMP/release/ByeDirty-$v.apk" \
+            --title "ByeDirty $v (alpha)" --notes-file "$notes" --prerelease --target "$GITHUB_SHA"

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Drop with a crescent highlight cut out (even-odd), plus a sparkle. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54,28c0,0 -17,19 -17,31.3a17,17 0,0 0,34 0c0,-12.3 -17,-31.3 -17,-31.3zM44.5,61.5c0,5.4 4,9.8 9.2,10.4 -3.3,-1.8 -5.5,-5.2 -5.5,-9.2 0,-2.4 0.8,-4.7 2.2,-6.5 -3.5,0.9 -5.9,3 -5.9,5.3z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M73,27l2.2,4.6 4.6,2.2 -4.6,2.2 -2.2,4.6 -2.2,-4.6 -4.6,-2.2 4.6,-2.2z" />
+</vector>
