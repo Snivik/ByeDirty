@@ -114,7 +114,8 @@ Every push to `main` runs the tests on GitHub Actions ([.github/workflows/ci.yml
 
 Signing: the `BYEDIRTY_KEYSTORE_BASE64`, `BYEDIRTY_KEYSTORE_PASSWORD`, `BYEDIRTY_KEY_ALIAS` and
 `BYEDIRTY_KEY_PASSWORD` repository secrets hold the release key. Locally, `Tools/release-local.sh` builds a
-signed APK with the password pulled from 1Password through `op run` (references in `Tools/signing.env`).
+signed APK with the password pulled from 1Password through `op run`: item `byedirty-release-key`, in the vault
+named by `BYEDIRTY_OP_VAULT` (default `Personal`).
 An untracked `signing.properties` with the same keys (without the `BYEDIRTY_` prefix, and `KEYSTORE` as a
 file path) also works.
 
