@@ -5,8 +5,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Release signing: CI passes the keystore through environment variables; locally, an untracked
-// signing.properties next to settings.gradle.kts works too. Without either, release builds are unsigned.
+// Release signing: CI passes the keystore through environment variables, and so does
+// Tools/release-local.sh (via 1Password's `op run`). An untracked signing.properties next to
+// settings.gradle.kts works too. Without any of them, release builds are unsigned.
 val signing = Properties().apply {
     rootProject.file("signing.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
 }
