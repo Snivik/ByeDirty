@@ -3,6 +3,7 @@
 # 1Password (see Tools/signing.env) instead of a file on disk.
 #
 #   Tools/release-local.sh            -> app/build/outputs/apk/release/app-release.apk
+#   Tools/release-local.sh bundle     -> app/build/outputs/bundle/release/app-release.aab (Google Play)
 #
 # Needs the 1Password CLI (`op`) with app integration on, a "byedirty-release-key" item holding the
 # keystore password in vault $BYEDIRTY_OP_VAULT (default "Personal"), and the keystore at
@@ -16,8 +17,13 @@ export BYEDIRTY_KEYSTORE="${BYEDIRTY_KEYSTORE:-$HOME/.android/byedirty/release.j
 export BYEDIRTY_OP_VAULT="${BYEDIRTY_OP_VAULT:-Personal}"
 [ -f "$BYEDIRTY_KEYSTORE" ] || { echo "No keystore at $BYEDIRTY_KEYSTORE" >&2; exit 1; }
 v="$(Tools/changelog.sh version)"
+case "${1:-apk}" in
+  apk) task=:app:assembleRelease ;;
+  bundle) task=:app:bundleRelease ;;
+  *) echo "usage: $0 [apk|bundle]" >&2; exit 2 ;;
+esac
 
 # No configuration cache and no daemon, so the password never lands in .gradle/ or lingers in memory.
 op run --env-file=Tools/signing.env -- \
-  ./gradlew --no-daemon --no-configuration-cache :app:assembleRelease \
+  ./gradlew --no-daemon --no-configuration-cache "$task" \
     -PversionName="$v" -PversionCode="$(git rev-list --count HEAD)"

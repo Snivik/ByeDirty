@@ -14,3 +14,4 @@ local.properties
 signing.properties
 *.jks
 *.keystore
+*.aab
